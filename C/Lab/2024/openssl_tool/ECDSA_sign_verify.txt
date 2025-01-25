@@ -1,0 +1,42 @@
+2. Full working ECDSA signature with OpenSSL as tool
+
+	2.1. The full list of built-in curves can be obtained through the following command
+
+		openssl ecparam -list_curves
+
+	2.2. Generate EC private key
+
+		openssl ecparam -name prime256v1 -genkey -noout -out private256v1.pem
+
+	2.3. Generate EC public key
+
+		openssl ec -in private256v1.pem -pubout -out prime256v1.pubkey.pem
+
+	2.4. Transform public key from PEM format into DER format (Distinguished Encoding Rules produces binary output and provides exactly one way to encode an ASN.1 value)
+
+		openssl ec -pubin -inform PEM -in prime256v1.pubkey.pem -outform DER -out public256v1.key
+
+	2.5. See the public key as DER format
+
+		dumpasn1 public256v1.key
+
+	2.6. See the public key as PEM format
+
+		cat prime256v1.pubkey.pem
+
+	2.7. Create MD content to be signed from static text "My content for signing"
+
+		echo -n "My content for signing" |openssl dgst -sha256 -binary > hash256
+
+	2.8. Create the ECDSA signature with low-level public key operation (pkeyutl)
+
+		openssl pkeyutl -sign -inkey private256v1.pem -in hash256 > prime256v1.sig
+
+	2.9. See the ECDSA as DER format	
+
+		openssl asn1parse -in prime256v1.sig -inform der
+		dumpasn1 prime256v1.sig
+
+	2.10 Verify the ECDSA signature
+
+		openssl pkeyutl -in hash256 -inkey prime256v1.pubkey.pem -pubin -verify -sigfile prime256v1.sig
