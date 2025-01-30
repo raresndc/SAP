@@ -6,9 +6,11 @@
 #define INPUT_BLOCK_LENGTH 15
 #define MAX_LINE_LENGTH 1024  // Maximum length of a line
 
-void compute_sha1_for_all_file(const char* filename) {
+void compute_sha_for_all_file(const char* filename) {
     unsigned char input[INPUT_BLOCK_LENGTH];
-    unsigned char output[SHA_DIGEST_LENGTH];
+    unsigned char output[SHA_DIGEST_LENGTH];  // SHA-1 output (20 bytes)
+    unsigned char output_sha256[SHA256_DIGEST_LENGTH];  // SHA-256 output (32 bytes)
+
     FILE* f = fopen(filename, "rb");
     if (!f) {
         perror("Failed to open file");
@@ -21,38 +23,56 @@ void compute_sha1_for_all_file(const char* filename) {
     fseek(f, 0, SEEK_SET);
 
     // Initialize SHA-1 context
-    SHA_CTX context;
-    SHA1_Init(&context);
+    SHA_CTX context_sha1;
+    SHA1_Init(&context_sha1);
+
+    // Initialize SHA-256 context
+    SHA256_CTX context_sha256;
+    SHA256_Init(&context_sha256);
 
     // Process the file in 15-byte chunks
     while (remaining_length > 0) {
         size_t bytes_to_read = (remaining_length > INPUT_BLOCK_LENGTH) ? INPUT_BLOCK_LENGTH : remaining_length;
         fread(input, sizeof(unsigned char), bytes_to_read, f);
-        SHA1_Update(&context, input, bytes_to_read);
+        SHA1_Update(&context_sha1, input, bytes_to_read);    // SHA-1 Update
+        SHA256_Update(&context_sha256, input, bytes_to_read);  // SHA-256 Update
         remaining_length -= bytes_to_read;
     }
 
     fclose(f);
 
     // Finalize SHA-1 hash
-    SHA1_Final(output, &context);
+    SHA1_Final(output, &context_sha1);
+    // Finalize SHA-256 hash
+    SHA256_Final(output_sha256, &context_sha256);
 
-    // Print the hash
-    printf("SHA-1 for all text file:\n");
+    // Print the SHA-1 hash
+    printf("SHA-1 for all file:\n");
     for (int i = 0; i < SHA_DIGEST_LENGTH; i++) {
         printf("%02X ", output[i]);
     }
     printf("\n");
+
+    // Print the SHA-256 hash
+    printf("SHA-256 for all file:\n");
+    for (int i = 0; i < SHA256_DIGEST_LENGTH; i++) {
+        printf("%02X ", output_sha256[i]);
+    }
+    printf("\n");
 }
 
-void compute_sha1_for_all_file_and_write_in_txt_file(const char* input_filename, const char* output_filename) {
+void compute_sha_for_all_file_and_write_in_txt_file(const char* input_filename, const char* output_filename) {
     unsigned char input[INPUT_BLOCK_LENGTH];
-    unsigned char output[SHA_DIGEST_LENGTH];
-    
+    unsigned char output[SHA_DIGEST_LENGTH];  // SHA-1 output (20 bytes)
+    unsigned char output_sha256[SHA256_DIGEST_LENGTH];  // SHA-256 output (32 bytes)
+
     FILE* f = fopen(input_filename, "r");
-    //FILE* f = fopen(input_filename, "rb");  // Correct mode for reading binary files
     FILE* output_file = fopen(output_filename, "w");
-    //FILE* output_file = fopen(output_filename, "wb");  // Use "wb" for binary mode (optional here, for consistency)
+
+    if (!f || !output_file) {
+        perror("Failed to open file");
+        return;
+    }
 
     // Get file length
     fseek(f, 0, SEEK_END);
@@ -60,33 +80,49 @@ void compute_sha1_for_all_file_and_write_in_txt_file(const char* input_filename,
     fseek(f, 0, SEEK_SET);
 
     // Initialize SHA-1 context
-    SHA_CTX context;
-    SHA1_Init(&context);
+    SHA_CTX context_sha1;
+    SHA1_Init(&context_sha1);
+
+    // Initialize SHA-256 context
+    SHA256_CTX context_sha256;
+    SHA256_Init(&context_sha256);
 
     // Process the file in 15-byte chunks
     while (remaining_length > 0) {
         size_t bytes_to_read = (remaining_length > INPUT_BLOCK_LENGTH) ? INPUT_BLOCK_LENGTH : remaining_length;
         fread(input, sizeof(unsigned char), bytes_to_read, f);
-        SHA1_Update(&context, input, bytes_to_read);
+        SHA1_Update(&context_sha1, input, bytes_to_read);    // SHA-1 Update
+        SHA256_Update(&context_sha256, input, bytes_to_read);  // SHA-256 Update
         remaining_length -= bytes_to_read;
     }
 
     fclose(f);
 
     // Finalize SHA-1 hash
-    SHA1_Final(output, &context);
+    SHA1_Final(output, &context_sha1);
+    // Finalize SHA-256 hash
+    SHA256_Final(output_sha256, &context_sha256);
 
-    // Print the hash
-    //printf("SHA-1 for all text file:\n");
+    // Write the SHA-1 hash
     for (int i = 0; i < SHA_DIGEST_LENGTH; i++) {
         fprintf(output_file, "%02X ", output[i]);
     }
     fprintf(output_file, "\n");
+
+    // Write the SHA-256 hash
+    for (int i = 0; i < SHA256_DIGEST_LENGTH; i++) {
+        fprintf(output_file, "%02X ", output_sha256[i]);
+    }
+    fprintf(output_file, "\n");
+
+    fclose(output_file);
 }
 
-void compute_sha1_for_each_line(const char* filename) {
+void compute_sha_for_each_line(const char* filename) {
     char line[MAX_LINE_LENGTH];
-    unsigned char output[SHA_DIGEST_LENGTH];
+    unsigned char output[SHA_DIGEST_LENGTH];  // SHA-1 output (20 bytes)
+    unsigned char output_sha256[SHA256_DIGEST_LENGTH];  // SHA-256 output (32 bytes)
+
     FILE* f = fopen(filename, "r");
 
     if (!f) {
@@ -106,41 +142,47 @@ void compute_sha1_for_each_line(const char* filename) {
         }
 
         // Initialize SHA-1 context
-        SHA_CTX context;
-        SHA1_Init(&context);
-        SHA1_Update(&context, line, len);
-        SHA1_Final(output, &context);
+        SHA_CTX context_sha1;
+        SHA1_Init(&context_sha1);
+        SHA1_Update(&context_sha1, line, len);
+        SHA1_Final(output, &context_sha1);
+
+        // Initialize SHA-256 context
+        SHA256_CTX context_sha256;
+        SHA256_Init(&context_sha256);
+        SHA256_Update(&context_sha256, line, len);
+        SHA256_Final(output_sha256, &context_sha256);
 
         // Print SHA-1 hash of the current line
+        printf("SHA-1: ");
         for (int i = 0; i < SHA_DIGEST_LENGTH; i++) {
-            printf("%02X ", output[i]);
+            printf("%02X", output[i]);
         }
+
+        // Print SHA-256 hash of the current line
+        printf("  SHA-256: ");
+        for (int i = 0; i < SHA256_DIGEST_LENGTH; i++) {
+            printf("%02X", output_sha256[i]);
+        }
+
         printf("  <- \"%s\"\n", line);  // Show the original line for reference
     }
 
     fclose(f);
 }
 
-void compute_sha1_for_each_line_write_in_txt_file(const char* input_filename, const char* output_filename) {
+void compute_sha_for_each_line_write_in_txt_file(const char* input_filename, const char* output_filename) {
     char line[MAX_LINE_LENGTH];
-    unsigned char output[SHA_DIGEST_LENGTH];
+    unsigned char output[SHA_DIGEST_LENGTH];  // SHA-1 output (20 bytes)
+    unsigned char output_sha256[SHA256_DIGEST_LENGTH];  // SHA-256 output (32 bytes)
 
     FILE* input_file = fopen(input_filename, "r");
-    //FILE* f = fopen(input_filename, "rb");  // Correct mode for reading binary files
     FILE* output_file = fopen(output_filename, "w");
-    //FILE* output_file = fopen(output_filename, "wb");  // Use "wb" for binary mode (optional here, for consistency)
 
-    if (!input_file) {
-        perror("Failed to open input file");
+    if (!input_file || !output_file) {
+        perror("Failed to open file");
         return;
     }
-    if (!output_file) {
-        perror("Failed to open output file");
-        fclose(input_file);
-        return;
-    }
-
-    //printf("SHA-1 for each line (also written to %s):\n", output_filename);
 
     while (fgets(line, sizeof(line), input_file)) {
         size_t len = strlen(line);
@@ -152,20 +194,29 @@ void compute_sha1_for_each_line_write_in_txt_file(const char* input_filename, co
         }
 
         // Compute SHA-1 hash for the line
-        SHA_CTX context;
-        SHA1_Init(&context);
-        SHA1_Update(&context, line, len);
-        SHA1_Final(output, &context);
+        SHA_CTX context_sha1;
+        SHA1_Init(&context_sha1);
+        SHA1_Update(&context_sha1, line, len);
+        SHA1_Final(output, &context_sha1);
 
-        // Print and write SHA-1 hash
-        //printf("SHA-1: ");
-        //fprintf(output_file, "SHA-1: ");
+        // Compute SHA-256 hash for the line
+        SHA256_CTX context_sha256;
+        SHA256_Init(&context_sha256);
+        SHA256_Update(&context_sha256, line, len);
+        SHA256_Final(output_sha256, &context_sha256);
+
+        // Write SHA-1 hash
         for (int i = 0; i < SHA_DIGEST_LENGTH; i++) {
-            //printf("%02X", output[i]);
             fprintf(output_file, "%02X ", output[i]);
         }
-        //printf("  <- \"%s\"\n", line);
-        //fprintf(output_file, "  <- \"%s\"\n", line);
+
+        fprintf(output_file, "\n");
+
+        // Write SHA-256 hash
+        for (int i = 0; i < SHA256_DIGEST_LENGTH; i++) {
+            fprintf(output_file, "%02X ", output_sha256[i]);
+        }
+
         fprintf(output_file, "\n");
     }
 
@@ -174,12 +225,13 @@ void compute_sha1_for_each_line_write_in_txt_file(const char* input_filename, co
 }
 
 int main() {
-    compute_sha1_for_all_file("wordlist.txt");
+    compute_sha_for_all_file("wordlist.txt");
 
-    compute_sha1_for_all_file_and_write_in_txt_file("wordlist.txt", "hash.txt");
+    compute_sha_for_all_file_and_write_in_txt_file("wordlist.txt", "hash.txt");
 
-    compute_sha1_for_each_line("wordlist.txt");
+    compute_sha_for_each_line("wordlist.txt");
 
-    compute_sha1_for_each_line_write_in_txt_file("wordlist.txt", "hashes.txt");
+    compute_sha_for_each_line_write_in_txt_file("wordlist.txt", "hashes.txt");
+
     return 0;
 }
