@@ -50,7 +50,9 @@ void compute_sha1_for_all_file_and_write_in_txt_file(const char* input_filename,
     unsigned char output[SHA_DIGEST_LENGTH];
     
     FILE* f = fopen(input_filename, "r");
+    //FILE* f = fopen(input_filename, "rb");  // Correct mode for reading binary files
     FILE* output_file = fopen(output_filename, "w");
+    //FILE* output_file = fopen(output_filename, "wb");  // Use "wb" for binary mode (optional here, for consistency)
 
     // Get file length
     fseek(f, 0, SEEK_END);
@@ -124,7 +126,9 @@ void compute_sha1_for_each_line_write_in_txt_file(const char* input_filename, co
     unsigned char output[SHA_DIGEST_LENGTH];
 
     FILE* input_file = fopen(input_filename, "r");
+    //FILE* f = fopen(input_filename, "rb");  // Correct mode for reading binary files
     FILE* output_file = fopen(output_filename, "w");
+    //FILE* output_file = fopen(output_filename, "wb");  // Use "wb" for binary mode (optional here, for consistency)
 
     if (!input_file) {
         perror("Failed to open input file");
