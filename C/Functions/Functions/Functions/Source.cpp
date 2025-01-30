@@ -10,8 +10,21 @@
 #define MAX_LINE_LENGTH 1024  // Maximum length of a line
 #define AES_BLOCK_SIZE 16
 
-unsigned char key_128[AES_BLOCK_SIZE] = { 0x00 };  // Example key
-unsigned char IV[AES_BLOCK_SIZE] = { 0x00 };
+void write_in_file(const char* filename) {
+
+    FILE* f = fopen(filename, "w");
+
+    if (!f) {
+        perror("Failed to open file");
+        return;
+    }
+
+    fprintf(f, "%s", "Nedelcu Rares");
+
+    printf("Name written successfully!\n");
+
+    fclose(f);
+}
 
 void hex_to_bytes(const char* hex, unsigned char* bytes, size_t len) {
     for (size_t i = 0; i < len; i++) {
