@@ -12,6 +12,34 @@
 #define AES_BLOCK_SIZE 16
 #define IV_SIZE 16
 
+
+//read ANY type of file into a variable
+char* read_from_file(const char* filename) {
+    FILE* f = fopen(filename, "rb");  
+
+    if (!f) {
+        perror("Failed to open file");
+        return NULL;
+    }
+
+    fseek(f, 0, SEEK_END);
+    long file_size = ftell(f);
+    rewind(f);  
+
+    char* content = (char*)malloc(file_size + 1);
+    if (!content) {
+        perror("Memory allocation failed");
+        fclose(f);
+        return NULL;
+    }
+
+    fread(content, 1, file_size, f);
+    content[file_size] = '\0';  
+
+    fclose(f);
+    return content;  
+}
+
 void write_in_file(const char* filename) {
 
     //wb for binary writing
@@ -624,6 +652,7 @@ int main() {
 
     compute_md5_for_each_line_write_in_txt_file("wordlist.txt", "md5_hashes.txt");
 
+    //test cbc with given plaintext
     unsigned char plaintext[] = { 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0a, 0x0b, 0x0c, 0x0d, 0x0e, 0x0f,
                      0x11, 0x02, 0x03, 0x44, 0x55, 0x06, 0x07, 0x08, 0x09, 0x0a, 0x0b, 0x0c, 0x0d, 0x0e, 0x0f,
                      0x21, 0x02, 0x03, 0x44, 0x65, 0x06, 0x07, 0x08, 0x09, 0xaa, 0x0b, 0x0c, 0xdd, 0x0e, 0x0f,
@@ -635,12 +664,23 @@ int main() {
     size_t keySize = sizeof(key) / sizeof(key[0]);
     encryptAndPrintCBC(plaintext, plaintextSize, key, keySize, IV);
 
+    //read iv from txt file
     printf("\n\nIV read from text file: ");
     unsigned char iv[16];
     read_iv_from_file("iv.txt", iv);
     for (int i = 0; i < 16; i++) {
         printf("%02X ", iv[i]);
     }
+
+    //read from any type of file (doesn t work for iv)
+    printf("\n\n");
+    char* content = read_from_file("wordlist.txt");
+
+    if (content) {
+        printf("File Contents:\n%s\n", content);
+        free(content);  // Free allocated memory
+    }
+
 
     return 0;
 }
