@@ -10,6 +10,7 @@
 #define INPUT_BLOCK_LENGTH 15
 #define MAX_LINE_LENGTH 1024  // Maximum length of a line
 #define IV_SIZE 16
+#define KEY_SIZE 32  // Adjust based on AES-128 (16), AES-192 (24), or AES-256 (32)
 
 
 //read ANY type of file into a variable
@@ -96,6 +97,25 @@ int read_iv_from_file(const char* filename, unsigned char iv[IV_SIZE]) {
     }
 
     return 0;
+}
+
+//will save the aes key in the parameter (adjust the KEY_SIZE defined)
+int read_aes_key(const char* filename, unsigned char* key) {
+    FILE* keyFile = fopen(filename, "rb");
+    if (!keyFile) {
+        perror("Failed to open key file");
+        return 1;  // Return error
+    }
+
+    size_t bytesRead = fread(key, 1, KEY_SIZE, keyFile);
+    fclose(keyFile);
+
+    if (bytesRead != KEY_SIZE) {
+        fprintf(stderr, "Error: Expected %d bytes but read %zu bytes.\n", KEY_SIZE, bytesRead);
+        return 1;  // Return error
+    }
+
+    return 0;  // Success
 }
 
 void hex_to_bytes(const char* hex, unsigned char* bytes, size_t len) {
@@ -866,6 +886,22 @@ int main() {
     size_t plaintextSize = sizeof(plaintext) / sizeof(plaintext[0]);
 
     encryptAndPrintECB(plaintext, plaintextSize, key_128, sizeof(key_128));
+#endif
+
+#ifdef TEST_AES_KEY_READING
+    unsigned char aes_key[KEY_SIZE];
+
+    if (read_aes_key("aes.key", aes_key) != 0) {
+        return 1;  // Handle error
+    }
+
+    printf("AES key read successfully!\n");
+
+    printf("AES Key: ");
+    for (int i = 0; i < KEY_SIZE; i++) {
+        printf("%02X ", aes_key[i]);
+    }
+    printf("\n");
 #endif
 
     return 0;
