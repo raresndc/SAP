@@ -9,7 +9,6 @@
 
 #define INPUT_BLOCK_LENGTH 15
 #define MAX_LINE_LENGTH 1024  // Maximum length of a line
-#define AES_BLOCK_SIZE 16
 #define IV_SIZE 16
 
 
@@ -634,7 +633,174 @@ void encryptAndPrintCBC(const unsigned char* plaintext,
     free(ciphertext);
 }
 
+int encryptFileECB(const char* inputFilename,
+    const char* outputFilename,
+    const unsigned char* key,
+    size_t keySize)
+{
+    // Validate arguments
+    if (!inputFilename || !outputFilename || !key) {
+        fprintf(stderr, "Invalid parameters to encryptFileECB.\n");
+        return 1;
+    }
+
+    // Check key size
+    if (keySize != 16 && keySize != 24 && keySize != 32) {
+        fprintf(stderr, "Key size must be 16 (128-bit), 24 (192-bit), or 32 (256-bit) bytes.\n");
+        return 2;
+    }
+
+    // Open input file
+    FILE* fIn = fopen(inputFilename, "rb");
+    if (!fIn) {
+        perror("Failed to open input file");
+        return 3;
+    }
+
+    // Determine file size
+    fseek(fIn, 0, SEEK_END);
+    long fileSize = ftell(fIn);
+    fseek(fIn, 0, SEEK_SET);
+
+    if (fileSize < 0) {
+        fclose(fIn);
+        fprintf(stderr, "Error determining file size or file is empty.\n");
+        return 4;
+    }
+
+    // Allocate buffer to hold the file data (plaintext)
+    unsigned char* plaintext = (unsigned char*)malloc(fileSize);
+    if (!plaintext) {
+        fclose(fIn);
+        fprintf(stderr, "Failed to allocate memory for plaintext.\n");
+        return 5;
+    }
+
+    // Read plaintext from file
+    if (fread(plaintext, 1, fileSize, fIn) != (size_t)fileSize) {
+        fclose(fIn);
+        free(plaintext);
+        fprintf(stderr, "Error reading input file.\n");
+        return 6;
+    }
+    fclose(fIn);
+
+    // Prepare the AES key
+    AES_KEY aesKey;
+    if (AES_set_encrypt_key(key, (int)(keySize * 8), &aesKey) < 0) {
+        free(plaintext);
+        fprintf(stderr, "Failed to set AES encryption key.\n");
+        return 7;
+    }
+
+    // Calculate number of blocks (handle partial block)
+    size_t partial_block = fileSize % AES_BLOCK_SIZE ? 1 : 0;
+    size_t totalBlocks = (fileSize / AES_BLOCK_SIZE) + partial_block;
+    size_t ciphertextSize = totalBlocks * AES_BLOCK_SIZE;
+
+    // Allocate buffer for ciphertext
+    unsigned char* ciphertext = (unsigned char*)malloc(ciphertextSize);
+    if (!ciphertext) {
+        free(plaintext);
+        fprintf(stderr, "Failed to allocate memory for ciphertext.\n");
+        return 8;
+    }
+
+    // Encrypt block by block
+    for (size_t offset = 0; offset < (size_t)fileSize; offset += AES_BLOCK_SIZE) {
+        // For the last partial block, we only have leftover bytes
+        unsigned char block[AES_BLOCK_SIZE] = { 0 };
+        size_t bytesLeft = fileSize - offset;
+        size_t blockSize = (bytesLeft < AES_BLOCK_SIZE) ? bytesLeft : AES_BLOCK_SIZE;
+
+        // Copy only what's left of plaintext into a full-sized block buffer
+        memcpy(block, plaintext + offset, blockSize);
+
+        // Encrypt one block at a time
+        AES_encrypt(block, ciphertext + offset, &aesKey);
+    }
+
+    // Write ciphertext to the output file
+    FILE* fOut = fopen(outputFilename, "wb");
+    if (!fOut) {
+        perror("Failed to open output file");
+        free(plaintext);
+        free(ciphertext);
+        return 9;
+    }
+
+    fwrite(ciphertext, 1, ciphertextSize, fOut);
+    fclose(fOut);
+
+    // Cleanup
+    free(plaintext);
+    free(ciphertext);
+
+    printf("File '%s' encrypted successfully into '%s' using AES-ECB.\n",
+        inputFilename, outputFilename);
+    return 0;
+}
+
+void encryptAndPrintECB(const unsigned char* plaintext,
+    size_t plaintextSize,
+    const unsigned char* key,
+    size_t keySize)
+{
+    if (!plaintext || !key) {
+        fprintf(stderr, "Invalid parameters to encryptAndPrintECB.\n");
+        return;
+    }
+    if (keySize != 16 && keySize != 24 && keySize != 32) {
+        fprintf(stderr, "Key size must be 16, 24, or 32 bytes.\n");
+        return;
+    }
+
+    // Prepare AES key
+    AES_KEY aesKey;
+    if (AES_set_encrypt_key(key, (int)(keySize * 8), &aesKey) < 0) {
+        fprintf(stderr, "Failed to set AES encryption key.\n");
+        return;
+    }
+
+    // Determine number of blocks (including partial)
+    size_t partial_block = (plaintextSize % AES_BLOCK_SIZE) ? 1 : 0;
+    size_t totalBlocks = (plaintextSize / AES_BLOCK_SIZE) + partial_block;
+    size_t ciphertextSize = totalBlocks * AES_BLOCK_SIZE;
+
+    // Allocate ciphertext buffer
+    unsigned char* ciphertext = (unsigned char*)malloc(ciphertextSize);
+    if (!ciphertext) {
+        fprintf(stderr, "Failed to allocate memory for ciphertext.\n");
+        return;
+    }
+    memset(ciphertext, 0, ciphertextSize);
+
+    // Encrypt block-by-block
+    size_t offset = 0;
+    while (offset < plaintextSize) {
+        unsigned char block[AES_BLOCK_SIZE] = { 0 };
+        size_t bytesLeft = plaintextSize - offset;
+        size_t blockSize = (bytesLeft < AES_BLOCK_SIZE) ? bytesLeft : AES_BLOCK_SIZE;
+
+        memcpy(block, plaintext + offset, blockSize);
+        AES_encrypt(block, ciphertext + offset, &aesKey);
+
+        offset += blockSize;
+    }
+
+    // Print the ciphertext (in hex)
+    printf("Ciphertext (AES-ECB): ");
+    for (size_t i = 0; i < ciphertextSize; i++) {
+        printf("%02X", ciphertext[i]);
+    }
+    printf("\n");
+
+    free(ciphertext);
+}
+
+
 int main() {
+#ifdef TEST_SHA_FUNCTIONS
 
     compute_sha_for_all_file("wordlist.txt");
 
@@ -643,7 +809,9 @@ int main() {
     compute_sha_for_each_line("wordlist.txt");
 
     compute_sha_for_each_line_write_in_txt_file("wordlist.txt", "hashes.txt");
+#endif
 
+#ifdef TEST_MD5_FUNCTIONS
     compute_md5_for_all_file("wordlist.txt");
 
     compute_md5_for_all_file_and_write_in_txt_file("wordlist.txt", "md5_hash.txt");
@@ -651,7 +819,9 @@ int main() {
     compute_md5_for_each_line("wordlist.txt");
 
     compute_md5_for_each_line_write_in_txt_file("wordlist.txt", "md5_hashes.txt");
+#endif
 
+#ifdef TEST_CBC_FUNCTIONS
     //test cbc with given plaintext
     unsigned char plaintext[] = { 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0a, 0x0b, 0x0c, 0x0d, 0x0e, 0x0f,
                      0x11, 0x02, 0x03, 0x44, 0x55, 0x06, 0x07, 0x08, 0x09, 0x0a, 0x0b, 0x0c, 0x0d, 0x0e, 0x0f,
@@ -663,7 +833,9 @@ int main() {
     size_t plaintextSize = sizeof(plaintext) / sizeof(plaintext[0]);
     size_t keySize = sizeof(key) / sizeof(key[0]);
     encryptAndPrintCBC(plaintext, plaintextSize, key, keySize, IV);
+#endif
 
+#ifdef TEST_IV_READING_FROM_TXT
     //read iv from txt file
     printf("\n\nIV read from text file: ");
     unsigned char iv[16];
@@ -671,7 +843,9 @@ int main() {
     for (int i = 0; i < 16; i++) {
         printf("%02X ", iv[i]);
     }
+#endif
 
+#ifdef TEST_READING_FROM_ANY_TYPE_OF_FILE
     //read from any type of file (doesn t work for iv)
     printf("\n\n");
     char* content = read_from_file("wordlist.txt");
@@ -680,7 +854,19 @@ int main() {
         printf("File Contents:\n%s\n", content);
         free(content);  // Free allocated memory
     }
+#endif
 
+#ifdef TEST_ECB_FUNCTIONS
+    unsigned char plaintext[] = { 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0a, 0x0b, 0x0c, 0x0d, 0x0e, 0x0f,
+                         0x11, 0x02, 0x03, 0x44, 0x55, 0x06, 0x07, 0x08, 0x09, 0x0a, 0x0b, 0x0c, 0x0d, 0x0e, 0x0f,
+                         0x21, 0x02, 0x03, 0x44, 0x65, 0x06, 0x07, 0x08, 0x09, 0xaa, 0x0b, 0x0c, 0xdd, 0x0e, 0x0f,
+                         0x31, 0x02, 0x03, 0x44, 0x75, 0x06, 0x07, 0x08, 0x09, 0xba, 0x0b, 0x0c, 0xdd, 0x0e };
+    unsigned char key_128[] = { 0xaa, 0xbb, 0xcc, 0xdd, 0xee, 0xff, 0x99, 0x88, 0x1a, 0x2b, 0x3c, 0x4d, 0x5e, 0x6f, 0x9a, 0x8b };
+
+    size_t plaintextSize = sizeof(plaintext) / sizeof(plaintext[0]);
+
+    encryptAndPrintECB(plaintext, plaintextSize, key_128, sizeof(key_128));
+#endif
 
     return 0;
 }
