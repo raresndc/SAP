@@ -16,7 +16,7 @@
 - Download **OpenSSL** and unzip the files.
 
 ### 3. Configure Project Properties
-- Open the **Project Properties**.
+- Open the **Project Properties** by right clicking on the project.
 
 ### 4. Set Up Include Directories
 - Go to **C/C++ -> General**.
@@ -44,7 +44,7 @@
 - Click **Apply** and **OK** to save your changes.
 
 ### 7. Add DLL File
-- Place the `libcrypto-1_1.dll` file (found in the **bin** folder) in the root directory of your project (where `source.cpp` is located).
+- Place the `libcrypto-1_1.dll` file (found in the **openssl111l-build\bin** folder) in the root directory of your project (where `source.cpp` is located).
 
   <p align="center">
     <img src="./images/dll.JPG" alt="Adding dll" />
