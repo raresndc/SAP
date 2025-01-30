@@ -4,14 +4,17 @@
 #include <openssl/sha.h>
 #include <openssl/md5.h>
 #include <stdlib.h>
+#include <ctype.h>
 #include <openssl/aes.h>
 
 #define INPUT_BLOCK_LENGTH 15
 #define MAX_LINE_LENGTH 1024  // Maximum length of a line
 #define AES_BLOCK_SIZE 16
+#define IV_SIZE 16
 
 void write_in_file(const char* filename) {
 
+    //wb for binary writing
     FILE* f = fopen(filename, "w");
 
     if (!f) {
@@ -24,6 +27,48 @@ void write_in_file(const char* filename) {
     printf("Name written successfully!\n");
 
     fclose(f);
+}
+
+//will save the iv in iv parameter (txt must be 0xFF, 0X1A etc)
+int read_iv_from_file(const char* filename, unsigned char iv[IV_SIZE]) {
+    FILE* ivFile = fopen(filename, "r");
+    if (!ivFile) {
+        perror("Failed to open IV file");
+        return 1;
+    }
+
+    char buffer[128]; 
+    int i = 0;
+
+    if (fgets(buffer, sizeof(buffer), ivFile) == NULL) {
+        perror("Error reading file");
+        fclose(ivFile);
+        return 1;
+    }
+    fclose(ivFile);
+
+    char* ptr = buffer;
+    while (*ptr && i < IV_SIZE) {
+        if (*ptr == ',' || isspace((unsigned char)*ptr)) {
+            ptr++;  
+            continue;
+        }
+
+        if (*ptr == '0' && (*(ptr + 1) == 'x' || *(ptr + 1) == 'X')) {
+            iv[i] = (unsigned char)strtol(ptr, &ptr, 16);
+            i++;
+        }
+        else {
+            ptr++;  
+        }
+    }
+
+    if (i != IV_SIZE) {
+        fprintf(stderr, "Error: IV file contains insufficient or excessive data\n");
+        return 1;
+    }
+
+    return 0;
 }
 
 void hex_to_bytes(const char* hex, unsigned char* bytes, size_t len) {
@@ -589,6 +634,13 @@ int main() {
     size_t plaintextSize = sizeof(plaintext) / sizeof(plaintext[0]);
     size_t keySize = sizeof(key) / sizeof(key[0]);
     encryptAndPrintCBC(plaintext, plaintextSize, key, keySize, IV);
+
+    printf("\n\nIV read from text file: ");
+    unsigned char iv[16];
+    read_iv_from_file("iv.txt", iv);
+    for (int i = 0; i < 16; i++) {
+        printf("%02X ", iv[i]);
+    }
 
     return 0;
 }
