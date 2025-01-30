@@ -3,9 +3,15 @@
 #include <string.h>
 #include <openssl/sha.h>
 #include <openssl/md5.h>
+#include <stdlib.h>
+#include <openssl/aes.h>
 
 #define INPUT_BLOCK_LENGTH 15
 #define MAX_LINE_LENGTH 1024  // Maximum length of a line
+#define AES_BLOCK_SIZE 16
+
+unsigned char key_128[AES_BLOCK_SIZE] = { 0x00 };  // Example key
+unsigned char IV[AES_BLOCK_SIZE] = { 0x00 };
 
 void compute_sha_for_all_file(const char* filename) {
     unsigned char input[INPUT_BLOCK_LENGTH];
@@ -387,7 +393,365 @@ void compute_md5_for_each_line_write_in_txt_file(const char* input_filename, con
     fclose(output_file);
 }
 
+void aes_cbc_encrypt_for_all_file(const char* filename) {
+    unsigned char input[INPUT_BLOCK_LENGTH];
+    unsigned char* ciphertext = NULL;
+    AES_KEY aes_key;
+
+    FILE* f = fopen(filename, "rb");
+    if (!f) {
+        perror("Failed to open file");
+        return;
+    }
+
+    // Get file length
+    fseek(f, 0, SEEK_END);
+    unsigned int remaining_length = ftell(f);
+    fseek(f, 0, SEEK_SET);
+
+    // Compute the number of ciphertext blocks
+    unsigned char partial_block = remaining_length % AES_BLOCK_SIZE ? 1 : 0;
+    unsigned char ciphertext_blocks = remaining_length / AES_BLOCK_SIZE + partial_block;
+    ciphertext = (unsigned char*)malloc(ciphertext_blocks * AES_BLOCK_SIZE);
+
+    // AES CBC encryption
+    AES_set_encrypt_key(key_128, 128, &aes_key);
+    unsigned char IV_dec[AES_BLOCK_SIZE];
+    memcpy(IV_dec, IV, AES_BLOCK_SIZE);  // Preserve IV for decryption
+    AES_cbc_encrypt(input, ciphertext, remaining_length, &aes_key, IV, AES_ENCRYPT);
+
+    // Print the ciphertext
+    printf("AES-CBC ciphertext: ");
+    for (unsigned int i = 0; i < ciphertext_blocks * AES_BLOCK_SIZE; i++) {
+        printf("%02X", ciphertext[i]);
+    }
+    printf("\n");
+
+    free(ciphertext);
+    fclose(f);
+}
+
+// AES CBC encryption for the entire file with output written to a text file
+void aes_cbc_encrypt_for_all_file_and_write_in_txt_file(const char* input_filename, const char* output_filename) {
+    unsigned char input[INPUT_BLOCK_LENGTH];
+    unsigned char* ciphertext = NULL;
+    AES_KEY aes_key;
+
+    FILE* f = fopen(input_filename, "rb");
+    FILE* output_file = fopen(output_filename, "w");
+
+    if (!f || !output_file) {
+        perror("Failed to open file");
+        return;
+    }
+
+    // Get file length
+    fseek(f, 0, SEEK_END);
+    unsigned int remaining_length = ftell(f);
+    fseek(f, 0, SEEK_SET);
+
+    // Compute the number of ciphertext blocks
+    unsigned char partial_block = remaining_length % AES_BLOCK_SIZE ? 1 : 0;
+    unsigned char ciphertext_blocks = remaining_length / AES_BLOCK_SIZE + partial_block;
+    ciphertext = (unsigned char*)malloc(ciphertext_blocks * AES_BLOCK_SIZE);
+
+    // AES CBC encryption
+    AES_set_encrypt_key(key_128, 128, &aes_key);
+    unsigned char IV_dec[AES_BLOCK_SIZE];
+    memcpy(IV_dec, IV, AES_BLOCK_SIZE);  // Preserve IV for decryption
+    AES_cbc_encrypt(input, ciphertext, remaining_length, &aes_key, IV, AES_ENCRYPT);
+
+    // Write the ciphertext to the output file
+    for (unsigned int i = 0; i < ciphertext_blocks * AES_BLOCK_SIZE; i++) {
+        fprintf(output_file, "%02X", ciphertext[i]);
+    }
+    fprintf(output_file, "\n");
+
+    free(ciphertext);
+    fclose(f);
+    fclose(output_file);
+}
+
+// AES CBC encryption for each line in a file
+void aes_cbc_encrypt_for_each_line(const char* filename) {
+    char line[MAX_LINE_LENGTH];
+    unsigned char* ciphertext = NULL;
+    AES_KEY aes_key;
+
+    FILE* f = fopen(filename, "r");
+
+    if (!f) {
+        perror("Failed to open file");
+        return;
+    }
+
+    printf("\nAES-CBC ciphertext for each line:\n");
+
+    while (fgets(line, sizeof(line), f)) {
+        size_t len = strlen(line);
+
+        // Remove newline character if present
+        if (line[len - 1] == '\n') {
+            line[len - 1] = '\0';
+            len--;
+        }
+
+        // Compute the ciphertext size (ensure we handle padding)
+        unsigned char partial_block = len % AES_BLOCK_SIZE ? 1 : 0;
+        unsigned char ciphertext_blocks = len / AES_BLOCK_SIZE + partial_block;
+        ciphertext = (unsigned char*)malloc(ciphertext_blocks * AES_BLOCK_SIZE);
+
+        // AES CBC encryption
+        AES_set_encrypt_key(key_128, 128, &aes_key);
+        unsigned char IV_dec[AES_BLOCK_SIZE];
+        memcpy(IV_dec, IV, AES_BLOCK_SIZE);  // Preserve IV for decryption
+        AES_cbc_encrypt((unsigned char*)line, ciphertext, len, &aes_key, IV, AES_ENCRYPT);
+
+        // Print the ciphertext
+        printf("Ciphertext: ");
+        for (unsigned int i = 0; i < ciphertext_blocks * AES_BLOCK_SIZE; i++) {
+            printf("%02X", ciphertext[i]);
+        }
+        printf("  <- \"%s\"\n", line);
+        free(ciphertext);
+    }
+
+    fclose(f);
+}
+
+// AES CBC encryption for each line and output written to a text file
+void aes_cbc_encrypt_for_each_line_write_in_txt_file(const char* input_filename, const char* output_filename) {
+    char line[MAX_LINE_LENGTH];
+    unsigned char* ciphertext = NULL;
+    AES_KEY aes_key;
+
+    FILE* input_file = fopen(input_filename, "r");
+    FILE* output_file = fopen(output_filename, "w");
+
+    if (!input_file || !output_file) {
+        perror("Failed to open file");
+        return;
+    }
+
+    while (fgets(line, sizeof(line), input_file)) {
+        size_t len = strlen(line);
+
+        // Remove newline character if present
+        if (line[len - 1] == '\n') {
+            line[len - 1] = '\0';
+            len--;
+        }
+
+        // Compute the ciphertext size (ensure we handle padding)
+        unsigned char partial_block = len % AES_BLOCK_SIZE ? 1 : 0;
+        unsigned char ciphertext_blocks = len / AES_BLOCK_SIZE + partial_block;
+        ciphertext = (unsigned char*)malloc(ciphertext_blocks * AES_BLOCK_SIZE);
+
+        // AES CBC encryption
+        AES_set_encrypt_key(key_128, 128, &aes_key);
+        unsigned char IV_dec[AES_BLOCK_SIZE];
+        memcpy(IV_dec, IV, AES_BLOCK_SIZE);  // Preserve IV for decryption
+        AES_cbc_encrypt((unsigned char*)line, ciphertext, len, &aes_key, IV, AES_ENCRYPT);
+
+        // Write the ciphertext to the output file
+        for (unsigned int i = 0; i < ciphertext_blocks * AES_BLOCK_SIZE; i++) {
+            fprintf(output_file, "%02X", ciphertext[i]);
+        }
+        fprintf(output_file, "\n");
+
+        free(ciphertext);
+    }
+
+    fclose(input_file);
+    fclose(output_file);
+}
+
+void aes_cbc_decrypt_for_all_file(const char* filename) {
+    unsigned char input[INPUT_BLOCK_LENGTH];
+    unsigned char* plaintext = NULL;
+    AES_KEY aes_key;
+
+    FILE* f = fopen(filename, "rb");
+    if (!f) {
+        perror("Failed to open file");
+        return;
+    }
+
+    // Get file length
+    fseek(f, 0, SEEK_END);
+    unsigned int remaining_length = ftell(f);
+    fseek(f, 0, SEEK_SET);
+
+    // Compute the number of ciphertext blocks
+    unsigned char partial_block = remaining_length % AES_BLOCK_SIZE ? 1 : 0;
+    unsigned char plaintext_blocks = remaining_length / AES_BLOCK_SIZE + partial_block;
+    plaintext = (unsigned char*)malloc(plaintext_blocks * AES_BLOCK_SIZE);
+
+    // AES CBC decryption
+    AES_set_decrypt_key(key_128, 128, &aes_key);
+    unsigned char IV_dec[AES_BLOCK_SIZE];
+    memcpy(IV_dec, IV, AES_BLOCK_SIZE);  // Preserve IV for decryption
+    AES_cbc_encrypt(input, plaintext, remaining_length, &aes_key, IV_dec, AES_DECRYPT);
+
+    // Print the decrypted plaintext
+    printf("AES-CBC decrypted plaintext: ");
+    for (unsigned int i = 0; i < plaintext_blocks * AES_BLOCK_SIZE; i++) {
+        printf("%02X", plaintext[i]);
+    }
+    printf("\n");
+
+    free(plaintext);
+    fclose(f);
+}
+
+// AES CBC decryption for the entire file with output written to a text file
+void aes_cbc_decrypt_for_all_file_and_write_in_txt_file(const char* input_filename, const char* output_filename) {
+    unsigned char input[INPUT_BLOCK_LENGTH];
+    unsigned char* plaintext = NULL;
+    AES_KEY aes_key;
+
+    FILE* f = fopen(input_filename, "rb");
+    FILE* output_file = fopen(output_filename, "w");
+
+    if (!f || !output_file) {
+        perror("Failed to open file");
+        return;
+    }
+
+    // Get file length
+    fseek(f, 0, SEEK_END);
+    unsigned int remaining_length = ftell(f);
+    fseek(f, 0, SEEK_SET);
+
+    // Compute the number of ciphertext blocks
+    unsigned char partial_block = remaining_length % AES_BLOCK_SIZE ? 1 : 0;
+    unsigned char plaintext_blocks = remaining_length / AES_BLOCK_SIZE + partial_block;
+    plaintext = (unsigned char*)malloc(plaintext_blocks * AES_BLOCK_SIZE);
+
+    // AES CBC decryption
+    AES_set_decrypt_key(key_128, 128, &aes_key);
+    unsigned char IV_dec[AES_BLOCK_SIZE];
+    memcpy(IV_dec, IV, AES_BLOCK_SIZE);  // Preserve IV for decryption
+    AES_cbc_encrypt(input, plaintext, remaining_length, &aes_key, IV_dec, AES_DECRYPT);
+
+    // Write the decrypted plaintext to the output file
+    for (unsigned int i = 0; i < plaintext_blocks * AES_BLOCK_SIZE; i++) {
+        fprintf(output_file, "%02X", plaintext[i]);
+    }
+    fprintf(output_file, "\n");
+
+    free(plaintext);
+    fclose(f);
+    fclose(output_file);
+}
+
+// AES CBC decryption for each line in a file
+void aes_cbc_decrypt_for_each_line(const char* filename) {
+    char line[MAX_LINE_LENGTH];
+    unsigned char* plaintext = NULL;
+    AES_KEY aes_key;
+
+    FILE* f = fopen(filename, "r");
+
+    if (!f) {
+        perror("Failed to open file");
+        return;
+    }
+
+    printf("\nAES-CBC decrypted plaintext for each line:\n");
+
+    while (fgets(line, sizeof(line), f)) {
+        size_t len = strlen(line);
+
+        // Remove newline character if present
+        if (line[len - 1] == '\n') {
+            line[len - 1] = '\0';
+            len--;
+        }
+
+        // Compute the plaintext size (ensure we handle padding)
+        unsigned char partial_block = len % AES_BLOCK_SIZE ? 1 : 0;
+        unsigned char plaintext_blocks = len / AES_BLOCK_SIZE + partial_block;
+        plaintext = (unsigned char*)malloc(plaintext_blocks * AES_BLOCK_SIZE);
+
+        // AES CBC decryption
+        AES_set_decrypt_key(key_128, 128, &aes_key);
+        unsigned char IV_dec[AES_BLOCK_SIZE];
+        memcpy(IV_dec, IV, AES_BLOCK_SIZE);  // Preserve IV for decryption
+        AES_cbc_encrypt((unsigned char*)line, plaintext, len, &aes_key, IV_dec, AES_DECRYPT);
+
+        // Print the decrypted plaintext
+        printf("Decrypted: ");
+        for (unsigned int i = 0; i < plaintext_blocks * AES_BLOCK_SIZE; i++) {
+            printf("%02X", plaintext[i]);
+        }
+        printf("  <- \"%s\"\n", line);
+        free(plaintext);
+    }
+
+    fclose(f);
+}
+
+// AES CBC decryption for each line and output written to a text file
+void aes_cbc_decrypt_for_each_line_write_in_txt_file(const char* input_filename, const char* output_filename) {
+    char line[MAX_LINE_LENGTH];
+    unsigned char* plaintext = NULL;
+    AES_KEY aes_key;
+
+    FILE* input_file = fopen(input_filename, "r");
+    FILE* output_file = fopen(output_filename, "w");
+
+    if (!input_file || !output_file) {
+        perror("Failed to open file");
+        return;
+    }
+
+    while (fgets(line, sizeof(line), input_file)) {
+        size_t len = strlen(line);
+
+        // Remove newline character if present
+        if (line[len - 1] == '\n') {
+            line[len - 1] = '\0';
+            len--;
+        }
+
+        // Calculate the size of ciphertext (it should be multiple of AES_BLOCK_SIZE)
+        size_t ciphertext_len = len / 2;  // Since each byte is represented by two hex characters
+        unsigned char* ciphertext = (unsigned char*)malloc(ciphertext_len);
+
+        // Convert hex string (input) to binary ciphertext
+        for (size_t i = 0; i < ciphertext_len; i++) {
+            sscanf(line + 2 * i, "%2hhx", &ciphertext[i]);
+        }
+
+        // Compute the plaintext size (ensure we handle padding)
+        size_t plaintext_len = ciphertext_len;  // Same size for the decrypted output
+        plaintext = (unsigned char*)malloc(plaintext_len);
+
+        // AES CBC decryption
+        AES_set_decrypt_key(key_128, 128, &aes_key);
+        unsigned char IV_dec[AES_BLOCK_SIZE];
+        memcpy(IV_dec, IV, AES_BLOCK_SIZE);  // Preserve IV for decryption
+        AES_cbc_encrypt(ciphertext, plaintext, ciphertext_len, &aes_key, IV_dec, AES_DECRYPT);
+
+        // Remove padding (PKCS7)
+        unsigned char padding = plaintext[plaintext_len - 1];
+        plaintext_len -= padding;  // Adjust the plaintext length to remove padding
+
+        // Write the decrypted plaintext to the output file
+        fwrite(plaintext, 1, plaintext_len, output_file);
+        fprintf(output_file, "\n");  // New line after each decrypted line
+
+        free(ciphertext);
+        free(plaintext);
+    }
+
+    fclose(input_file);
+    fclose(output_file);
+}
+
 int main() {
+
     compute_sha_for_all_file("wordlist.txt");
 
     compute_sha_for_all_file_and_write_in_txt_file("wordlist.txt", "hash.txt");
@@ -403,6 +767,22 @@ int main() {
     compute_md5_for_each_line("wordlist.txt");
 
     compute_md5_for_each_line_write_in_txt_file("wordlist.txt", "md5_hashes.txt");
+
+    aes_cbc_encrypt_for_all_file("wordlist.txt");
+
+    aes_cbc_encrypt_for_all_file_and_write_in_txt_file("wordlist.txt", "aes_encrypted.txt");
+
+    aes_cbc_encrypt_for_each_line("wordlist.txt");
+
+    aes_cbc_encrypt_for_each_line_write_in_txt_file("wordlist.txt", "aes_encrypted_lines.txt");
+
+    //aes_cbc_decrypt_for_all_file("aes_encrypted.txt");
+
+    //aes_cbc_decrypt_for_all_file_and_write_in_txt_file("aes_encrypted.txt", "aes_decrypted.txt");
+
+    aes_cbc_decrypt_for_each_line("aes_encrypted.txt");
+
+    aes_cbc_decrypt_for_each_line_write_in_txt_file("aes_encrypted.txt", "aes_decrypted_lines.txt");
 
     return 0;
 }
