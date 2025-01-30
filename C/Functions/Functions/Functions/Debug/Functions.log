@@ -1,12 +1,2 @@
 ﻿  Source.cpp
-D:\Rares\SAP\Git\SAP\C\Functions\Functions\Functions\Source.cpp(425,32): warning C4018: '<': signed/unsigned mismatch
-D:\Rares\SAP\Git\SAP\C\Functions\Functions\Functions\Source.cpp(465,32): warning C4018: '<': signed/unsigned mismatch
-D:\Rares\SAP\Git\SAP\C\Functions\Functions\Functions\Source.cpp(501,41): warning C4267: 'initializing': conversion from 'size_t' to 'unsigned char', possible loss of data
-D:\Rares\SAP\Git\SAP\C\Functions\Functions\Functions\Source.cpp(512,36): warning C4018: '<': signed/unsigned mismatch
-D:\Rares\SAP\Git\SAP\C\Functions\Functions\Functions\Source.cpp(547,41): warning C4267: 'initializing': conversion from 'size_t' to 'unsigned char', possible loss of data
-D:\Rares\SAP\Git\SAP\C\Functions\Functions\Functions\Source.cpp(557,36): warning C4018: '<': signed/unsigned mismatch
-D:\Rares\SAP\Git\SAP\C\Functions\Functions\Functions\Source.cpp(598,32): warning C4018: '<': signed/unsigned mismatch
-D:\Rares\SAP\Git\SAP\C\Functions\Functions\Functions\Source.cpp(638,32): warning C4018: '<': signed/unsigned mismatch
-D:\Rares\SAP\Git\SAP\C\Functions\Functions\Functions\Source.cpp(674,40): warning C4267: 'initializing': conversion from 'size_t' to 'unsigned char', possible loss of data
-D:\Rares\SAP\Git\SAP\C\Functions\Functions\Functions\Source.cpp(685,36): warning C4018: '<': signed/unsigned mismatch
-  Functions.vcxproj -> D:\Rares\SAP\Git\SAP\C\Functions\Functions\Debug\Functions.exe
+  Functions.vcxproj -> D:\Master\SAP_Recap\C\Functions\Functions\Debug\Functions.exe

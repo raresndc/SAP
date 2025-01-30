@@ -1,0 +1,29 @@
+﻿  Source.cpp
+D:\Master\SAP_Recap\C\Functions\Functions\Functions\Source.cpp(46,29): warning C4267: '-=': conversion from 'size_t' to 'unsigned int', possible loss of data
+D:\Master\SAP_Recap\C\Functions\Functions\Functions\Source.cpp(103,29): warning C4267: '-=': conversion from 'size_t' to 'unsigned int', possible loss of data
+D:\Master\SAP_Recap\C\Functions\Functions\Functions\Source.cpp(258,29): warning C4267: '-=': conversion from 'size_t' to 'unsigned int', possible loss of data
+D:\Master\SAP_Recap\C\Functions\Functions\Functions\Source.cpp(300,29): warning C4267: '-=': conversion from 'size_t' to 'unsigned int', possible loss of data
+D:\Master\SAP_Recap\C\Functions\Functions\Functions\Source.cpp(425,32): warning C4018: '<': signed/unsigned mismatch
+D:\Master\SAP_Recap\C\Functions\Functions\Functions\Source.cpp(465,32): warning C4018: '<': signed/unsigned mismatch
+D:\Master\SAP_Recap\C\Functions\Functions\Functions\Source.cpp(501,41): warning C4267: 'initializing': conversion from 'size_t' to 'unsigned char', possible loss of data
+D:\Master\SAP_Recap\C\Functions\Functions\Functions\Source.cpp(512,36): warning C4018: '<': signed/unsigned mismatch
+D:\Master\SAP_Recap\C\Functions\Functions\Functions\Source.cpp(547,41): warning C4267: 'initializing': conversion from 'size_t' to 'unsigned char', possible loss of data
+D:\Master\SAP_Recap\C\Functions\Functions\Functions\Source.cpp(557,36): warning C4018: '<': signed/unsigned mismatch
+D:\Master\SAP_Recap\C\Functions\Functions\Functions\Source.cpp(598,32): warning C4018: '<': signed/unsigned mismatch
+D:\Master\SAP_Recap\C\Functions\Functions\Functions\Source.cpp(638,32): warning C4018: '<': signed/unsigned mismatch
+D:\Master\SAP_Recap\C\Functions\Functions\Functions\Source.cpp(674,40): warning C4267: 'initializing': conversion from 'size_t' to 'unsigned char', possible loss of data
+D:\Master\SAP_Recap\C\Functions\Functions\Functions\Source.cpp(685,36): warning C4018: '<': signed/unsigned mismatch
+Source.obj : error LNK2019: unresolved external symbol SHA1_Init referenced in function "void __cdecl compute_sha_for_all_file(char const *)" (?compute_sha_for_all_file@@YAXPEBD@Z)
+Source.obj : error LNK2019: unresolved external symbol SHA1_Update referenced in function "void __cdecl compute_sha_for_all_file(char const *)" (?compute_sha_for_all_file@@YAXPEBD@Z)
+Source.obj : error LNK2019: unresolved external symbol SHA1_Final referenced in function "void __cdecl compute_sha_for_all_file(char const *)" (?compute_sha_for_all_file@@YAXPEBD@Z)
+Source.obj : error LNK2019: unresolved external symbol SHA256_Init referenced in function "void __cdecl compute_sha_for_all_file(char const *)" (?compute_sha_for_all_file@@YAXPEBD@Z)
+Source.obj : error LNK2019: unresolved external symbol SHA256_Update referenced in function "void __cdecl compute_sha_for_all_file(char const *)" (?compute_sha_for_all_file@@YAXPEBD@Z)
+Source.obj : error LNK2019: unresolved external symbol SHA256_Final referenced in function "void __cdecl compute_sha_for_all_file(char const *)" (?compute_sha_for_all_file@@YAXPEBD@Z)
+Source.obj : error LNK2019: unresolved external symbol MD5_Init referenced in function "void __cdecl compute_md5_for_all_file(char const *)" (?compute_md5_for_all_file@@YAXPEBD@Z)
+Source.obj : error LNK2019: unresolved external symbol MD5_Update referenced in function "void __cdecl compute_md5_for_all_file(char const *)" (?compute_md5_for_all_file@@YAXPEBD@Z)
+Source.obj : error LNK2019: unresolved external symbol MD5_Final referenced in function "void __cdecl compute_md5_for_all_file(char const *)" (?compute_md5_for_all_file@@YAXPEBD@Z)
+Source.obj : error LNK2019: unresolved external symbol AES_set_encrypt_key referenced in function "void __cdecl aes_cbc_encrypt_for_all_file(char const *)" (?aes_cbc_encrypt_for_all_file@@YAXPEBD@Z)
+Source.obj : error LNK2019: unresolved external symbol AES_set_decrypt_key referenced in function "void __cdecl aes_cbc_decrypt_for_all_file(char const *)" (?aes_cbc_decrypt_for_all_file@@YAXPEBD@Z)
+Source.obj : error LNK2019: unresolved external symbol AES_cbc_encrypt referenced in function "void __cdecl aes_cbc_decrypt_for_all_file(char const *)" (?aes_cbc_decrypt_for_all_file@@YAXPEBD@Z)
+D:\Master\SAP_Recap\C\openssl111l-build\lib\libcrypto.lib : warning LNK4272: library machine type 'x86' conflicts with target machine type 'x64'
+D:\Master\SAP_Recap\C\Functions\Functions\x64\Debug\Functions.exe : fatal error LNK1120: 12 unresolved externals
