@@ -2,6 +2,7 @@
 #include <stdio.h>
 #include <string.h>
 #include <openssl/sha.h>
+#include <openssl/md5.h>
 
 #define INPUT_BLOCK_LENGTH 15
 #define MAX_LINE_LENGTH 1024  // Maximum length of a line
@@ -224,6 +225,168 @@ void compute_sha_for_each_line_write_in_txt_file(const char* input_filename, con
     fclose(output_file);
 }
 
+void compute_md5_for_all_file(const char* filename) {
+    unsigned char input[INPUT_BLOCK_LENGTH];
+    unsigned char output[MD5_DIGEST_LENGTH];  // MD5 output (16 bytes)
+
+    FILE* f = fopen(filename, "rb");
+    if (!f) {
+        perror("Failed to open file");
+        return;
+    }
+
+    // Get file length
+    fseek(f, 0, SEEK_END);
+    unsigned int remaining_length = ftell(f);
+    fseek(f, 0, SEEK_SET);
+
+    // Initialize MD5 context
+    MD5_CTX context_md5;
+    MD5_Init(&context_md5);
+
+    // Process the file in 15-byte chunks
+    while (remaining_length > 0) {
+        size_t bytes_to_read = (remaining_length > INPUT_BLOCK_LENGTH) ? INPUT_BLOCK_LENGTH : remaining_length;
+        fread(input, sizeof(unsigned char), bytes_to_read, f);
+        MD5_Update(&context_md5, input, bytes_to_read);  // MD5 Update
+        remaining_length -= bytes_to_read;
+    }
+
+    fclose(f);
+
+    // Finalize MD5 hash
+    MD5_Final(output, &context_md5);
+
+    // Print the MD5 hash
+    printf("MD5 for all file:\n");
+    for (int i = 0; i < MD5_DIGEST_LENGTH; i++) {
+        printf("%02X ", output[i]);
+    }
+    printf("\n");
+}
+
+void compute_md5_for_all_file_and_write_in_txt_file(const char* input_filename, const char* output_filename) {
+    unsigned char input[INPUT_BLOCK_LENGTH];
+    unsigned char output[MD5_DIGEST_LENGTH];  // MD5 output (16 bytes)
+
+    FILE* f = fopen(input_filename, "r");
+    FILE* output_file = fopen(output_filename, "w");
+
+    if (!f || !output_file) {
+        perror("Failed to open file");
+        return;
+    }
+
+    // Get file length
+    fseek(f, 0, SEEK_END);
+    unsigned int remaining_length = ftell(f);
+    fseek(f, 0, SEEK_SET);
+
+    // Initialize MD5 context
+    MD5_CTX context_md5;
+    MD5_Init(&context_md5);
+
+    // Process the file in 15-byte chunks
+    while (remaining_length > 0) {
+        size_t bytes_to_read = (remaining_length > INPUT_BLOCK_LENGTH) ? INPUT_BLOCK_LENGTH : remaining_length;
+        fread(input, sizeof(unsigned char), bytes_to_read, f);
+        MD5_Update(&context_md5, input, bytes_to_read);  // MD5 Update
+        remaining_length -= bytes_to_read;
+    }
+
+    fclose(f);
+
+    // Finalize MD5 hash
+    MD5_Final(output, &context_md5);
+
+    // Write the MD5 hash
+    for (int i = 0; i < MD5_DIGEST_LENGTH; i++) {
+        fprintf(output_file, "%02X ", output[i]);
+    }
+    fprintf(output_file, "\n");
+
+    fclose(output_file);
+}
+
+void compute_md5_for_each_line(const char* filename) {
+    char line[MAX_LINE_LENGTH];
+    unsigned char output[MD5_DIGEST_LENGTH];  // MD5 output (16 bytes)
+
+    FILE* f = fopen(filename, "r");
+
+    if (!f) {
+        perror("Failed to open file");
+        return;
+    }
+
+    printf("\nMD5 for each line:\n");
+
+    while (fgets(line, sizeof(line), f)) {
+        size_t len = strlen(line);
+
+        // Remove newline character if present
+        if (line[len - 1] == '\n') {
+            line[len - 1] = '\0';
+            len--;
+        }
+
+        // Initialize MD5 context
+        MD5_CTX context_md5;
+        MD5_Init(&context_md5);
+        MD5_Update(&context_md5, line, len);
+        MD5_Final(output, &context_md5);
+
+        // Print MD5 hash of the current line
+        printf("MD5: ");
+        for (int i = 0; i < MD5_DIGEST_LENGTH; i++) {
+            printf("%02X", output[i]);
+        }
+
+        printf("  <- \"%s\"\n", line);  // Show the original line for reference
+    }
+
+    fclose(f);
+}
+
+void compute_md5_for_each_line_write_in_txt_file(const char* input_filename, const char* output_filename) {
+    char line[MAX_LINE_LENGTH];
+    unsigned char output[MD5_DIGEST_LENGTH];  // MD5 output (16 bytes)
+
+    FILE* input_file = fopen(input_filename, "r");
+    FILE* output_file = fopen(output_filename, "w");
+
+    if (!input_file || !output_file) {
+        perror("Failed to open file");
+        return;
+    }
+
+    while (fgets(line, sizeof(line), input_file)) {
+        size_t len = strlen(line);
+
+        // Remove newline character if present
+        if (line[len - 1] == '\n') {
+            line[len - 1] = '\0';
+            len--;
+        }
+
+        // Compute MD5 hash for the line
+        MD5_CTX context_md5;
+        MD5_Init(&context_md5);
+        MD5_Update(&context_md5, line, len);
+        MD5_Final(output, &context_md5);
+
+        // Write MD5 hash
+        for (int i = 0; i < MD5_DIGEST_LENGTH; i++) {
+            fprintf(output_file, "%02X ", output[i]);
+        }
+
+        fprintf(output_file, "\n");
+    }
+
+    fclose(input_file);
+    fclose(output_file);
+}
+
 int main() {
     compute_sha_for_all_file("wordlist.txt");
 
@@ -232,6 +395,14 @@ int main() {
     compute_sha_for_each_line("wordlist.txt");
 
     compute_sha_for_each_line_write_in_txt_file("wordlist.txt", "hashes.txt");
+
+    compute_md5_for_all_file("wordlist.txt");
+
+    compute_md5_for_all_file_and_write_in_txt_file("wordlist.txt", "md5_hash.txt");
+
+    compute_md5_for_each_line("wordlist.txt");
+
+    compute_md5_for_each_line_write_in_txt_file("wordlist.txt", "md5_hashes.txt");
 
     return 0;
 }
