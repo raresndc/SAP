@@ -11,6 +11,7 @@
 #define MAX_LINE_LENGTH 1024  // Maximum length of a line
 #define IV_SIZE 16
 #define KEY_SIZE 32  // Adjust based on AES-128 (16), AES-192 (24), or AES-256 (32)
+#define AES_BLOCK_SIZE 16
 
 
 //read ANY type of file into a variable
@@ -112,6 +113,31 @@ int read_aes_key(const char* filename, unsigned char* key) {
 
     if (bytesRead != KEY_SIZE) {
         fprintf(stderr, "Error: Expected %d bytes but read %zu bytes.\n", KEY_SIZE, bytesRead);
+        return 1;  // Return error
+    }
+
+    return 0;  // Success
+}
+
+//read iv and key from the same file
+int read_iv_and_aes_key(const char* filename, unsigned char* iv, unsigned char* key, size_t key_size) {
+    FILE* keyFile = fopen(filename, "rb");
+    if (!keyFile) {
+        return 1;  // Return error
+    }
+
+    // Read IV
+    size_t bytesRead = fread(iv, 1, IV_SIZE, keyFile);
+    if (bytesRead != IV_SIZE) {
+        fclose(keyFile);
+        return 1;  // Return error
+    }
+
+    // Read AES key
+    bytesRead = fread(key, 1, key_size, keyFile);
+    fclose(keyFile);
+
+    if (bytesRead != key_size) {
         return 1;  // Return error
     }
 
@@ -818,6 +844,197 @@ void encryptAndPrintECB(const unsigned char* plaintext,
     free(ciphertext);
 }
 
+int encryptFileCBCLineByLine(const char* inputFilename,
+    const char* outputFilename,
+    const unsigned char* key,
+    size_t keySize,
+    const unsigned char* iv)
+{
+    // Basic checks
+    if (!inputFilename || !outputFilename || !key || !iv) {
+        fprintf(stderr, "Invalid parameters.\n");
+        return 1;
+    }
+    // Validate key size
+    if (keySize != 16 && keySize != 24 && keySize != 32) {
+        fprintf(stderr, "Key size must be 16, 24, or 32 bytes.\n");
+        return 2;
+    }
+
+    // Open input file
+    FILE* fIn = fopen(inputFilename, "r");
+    if (!fIn) {
+        perror("Failed to open input file");
+        return 3;
+    }
+
+    // Open output file
+    FILE* fOut = fopen(outputFilename, "wb");
+    if (!fOut) {
+        perror("Failed to open output file");
+        fclose(fIn);
+        return 4;
+    }
+
+    // Initialize the AES encryption key
+    AES_KEY aesKey;
+    if (AES_set_encrypt_key(key, (int)(keySize * 8), &aesKey) < 0) {
+        fprintf(stderr, "Failed to set AES encryption key.\n");
+        fclose(fIn);
+        fclose(fOut);
+        return 5;
+    }
+
+    // Copy IV because AES_cbc_encrypt modifies it
+    unsigned char ivCopy[AES_BLOCK_SIZE];
+    memcpy(ivCopy, iv, AES_BLOCK_SIZE);
+
+    // Buffer to read lines
+    // Increase this size if you expect very long lines
+    char lineBuffer[1024];
+
+    while (fgets(lineBuffer, sizeof(lineBuffer), fIn)) {
+        size_t lineLen = strlen(lineBuffer);
+        // Note: This line length includes the newline character if present
+        // unless the line exactly filled the buffer (no newline until next iteration).
+
+        // We will zero-pad any partial block just like the original code
+        // Determine how many blocks we need for this line
+        size_t partialBlock = (lineLen % AES_BLOCK_SIZE) ? 1 : 0;
+        size_t blocks = (lineLen / AES_BLOCK_SIZE) + partialBlock;
+        size_t encSize = blocks * AES_BLOCK_SIZE;
+
+        // Prepare plaintext buffer (zero it out for padding)
+        unsigned char* plaintext = (unsigned char*)calloc(encSize, 1);
+        if (!plaintext) {
+            fprintf(stderr, "Memory allocation error.\n");
+            fclose(fIn);
+            fclose(fOut);
+            return 6;
+        }
+        memcpy(plaintext, lineBuffer, lineLen);
+
+        // Allocate ciphertext buffer
+        unsigned char* ciphertext = (unsigned char*)malloc(encSize);
+        if (!ciphertext) {
+            fprintf(stderr, "Memory allocation error.\n");
+            free(plaintext);
+            fclose(fIn);
+            fclose(fOut);
+            return 7;
+        }
+
+        // Encrypt using CBC
+        AES_cbc_encrypt(plaintext, ciphertext, encSize, &aesKey, ivCopy, AES_ENCRYPT);
+
+        // Write encrypted data to output
+        fwrite(ciphertext, 1, encSize, fOut);
+
+        // Clean up this iteration
+        free(plaintext);
+        free(ciphertext);
+    }
+
+    fclose(fIn);
+    fclose(fOut);
+
+    printf("File '%s' encrypted line-by-line (CBC) into '%s'.\n",
+        inputFilename, outputFilename);
+    return 0;
+}
+
+int encryptFileECBLineByLine(const char* inputFilename,
+    const char* outputFilename,
+    const unsigned char* key,
+    size_t keySize)
+{
+    // Basic checks
+    if (!inputFilename || !outputFilename || !key) {
+        fprintf(stderr, "Invalid parameters.\n");
+        return 1;
+    }
+
+    // Validate key size
+    if (keySize != 16 && keySize != 24 && keySize != 32) {
+        fprintf(stderr, "Key size must be 16, 24, or 32 bytes.\n");
+        return 2;
+    }
+
+    // Open input file
+    FILE* fIn = fopen(inputFilename, "r");
+    if (!fIn) {
+        perror("Failed to open input file");
+        return 3;
+    }
+
+    // Open output file
+    FILE* fOut = fopen(outputFilename, "wb");
+    if (!fOut) {
+        perror("Failed to open output file");
+        fclose(fIn);
+        return 4;
+    }
+
+    // Initialize AES key
+    AES_KEY aesKey;
+    if (AES_set_encrypt_key(key, (int)(keySize * 8), &aesKey) < 0) {
+        fprintf(stderr, "Failed to set AES encryption key.\n");
+        fclose(fIn);
+        fclose(fOut);
+        return 5;
+    }
+
+    // Buffer to read lines
+    char lineBuffer[1024];
+
+    while (fgets(lineBuffer, sizeof(lineBuffer), fIn)) {
+        size_t lineLen = strlen(lineBuffer);
+
+        // Calculate the block-aligned size for this line
+        size_t partialBlock = (lineLen % AES_BLOCK_SIZE) ? 1 : 0;
+        size_t blocks = (lineLen / AES_BLOCK_SIZE) + partialBlock;
+        size_t encSize = blocks * AES_BLOCK_SIZE;
+
+        // Prepare plaintext buffer (zero-pad)
+        unsigned char* plaintext = (unsigned char*)calloc(encSize, 1);
+        if (!plaintext) {
+            fprintf(stderr, "Memory allocation error.\n");
+            fclose(fIn);
+            fclose(fOut);
+            return 6;
+        }
+        memcpy(plaintext, lineBuffer, lineLen);
+
+        // Allocate ciphertext buffer
+        unsigned char* ciphertext = (unsigned char*)malloc(encSize);
+        if (!ciphertext) {
+            fprintf(stderr, "Memory allocation error.\n");
+            free(plaintext);
+            fclose(fIn);
+            fclose(fOut);
+            return 7;
+        }
+
+        // Encrypt each block
+        for (size_t offset = 0; offset < encSize; offset += AES_BLOCK_SIZE) {
+            AES_encrypt(plaintext + offset, ciphertext + offset, &aesKey);
+        }
+
+        // Write to output
+        fwrite(ciphertext, 1, encSize, fOut);
+
+        // Clean up
+        free(plaintext);
+        free(ciphertext);
+    }
+
+    fclose(fIn);
+    fclose(fOut);
+
+    printf("File '%s' encrypted line-by-line (ECB) into '%s'.\n",
+        inputFilename, outputFilename);
+    return 0;
+}
 
 int main() {
 #ifdef TEST_SHA_FUNCTIONS
@@ -902,6 +1119,46 @@ int main() {
         printf("%02X ", aes_key[i]);
     }
     printf("\n");
+#endif
+
+#ifdef TEST_READING_THE_IV_AND_AES_KEY_FROM_THE_SAME_FILE
+    unsigned char iv[IV_SIZE];
+    unsigned char key[KEY_SIZE];
+
+    const char* filename = "keyfile.bin";
+
+    if (read_iv_and_aes_key(filename, iv, key, KEY_SIZE) != 0) {
+        fprintf(stderr, "Failed to read IV and AES key from file.\n");
+        return 1;
+    }
+#endif
+
+#ifdef TEST_ECB_AND_CBC_ENCRYPTION_LINE_BY_LINE
+    unsigned char key[16] = "0123456789ABCDEF";  // 128-bit example
+    unsigned char iv[16] = "IV_IS_16_BYTES!!";  // 16 bytes for CBC
+
+    // Encrypt line-by-line with CBC
+    int resultCBC = encryptFileCBCLineByLine(
+        "plaintext.txt",
+        "ciphertext_cbc.bin",
+        key,
+        sizeof(key),
+        iv
+    );
+    if (resultCBC != 0) {
+        fprintf(stderr, "CBC line-by-line encryption failed.\n");
+    }
+
+    // Encrypt line-by-line with ECB
+    int resultECB = encryptFileECBLineByLine(
+        "plaintext.txt",
+        "ciphertext_ecb.bin",
+        key,
+        sizeof(key)
+    );
+    if (resultECB != 0) {
+        fprintf(stderr, "ECB line-by-line encryption failed.\n");
+    }
 #endif
 
     return 0;
