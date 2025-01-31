@@ -1036,6 +1036,192 @@ int encryptFileECBLineByLine(const char* inputFilename,
     return 0;
 }
 
+int decryptFileCBCLineByLine(const char* inputFilename,
+    const char* outputFilename,
+    const unsigned char* key,
+    size_t keySize,
+    const unsigned char* iv)
+{
+    // Validate arguments
+    if (!inputFilename || !outputFilename || !key || !iv) {
+        fprintf(stderr, "Invalid parameters.\n");
+        return 1;
+    }
+    // Check key size
+    if (keySize != 16 && keySize != 24 && keySize != 32) {
+        fprintf(stderr, "Key size must be 16, 24, or 32 bytes.\n");
+        return 2;
+    }
+
+    // Open input (ciphertext) file
+    FILE* fIn = fopen(inputFilename, "rb");
+    if (!fIn) {
+        perror("Failed to open ciphertext file");
+        return 3;
+    }
+
+    // Open output (plaintext) file
+    FILE* fOut = fopen(outputFilename, "w");
+    if (!fOut) {
+        perror("Failed to open output file");
+        fclose(fIn);
+        return 4;
+    }
+
+    // Set up AES key for decryption
+    AES_KEY aesKey;
+    if (AES_set_decrypt_key(key, (int)(keySize * 8), &aesKey) < 0) {
+        fprintf(stderr, "Failed to set AES decryption key.\n");
+        fclose(fIn);
+        fclose(fOut);
+        return 5;
+    }
+
+    // Copy IV because AES_cbc_encrypt (AES_DECRYPT) will modify it
+    unsigned char ivCopy[AES_BLOCK_SIZE];
+    memcpy(ivCopy, iv, AES_BLOCK_SIZE);
+
+    // We use the same chunk size as in the encryption function (1024).
+    // Each line was read into 1024, padded to a multiple of 16, and written.
+    unsigned char cipherBuffer[1024];
+    unsigned char plainBuffer[1024];
+
+    while (1) {
+        // Read exactly up to 1024 bytes of ciphertext
+        size_t bytesRead = fread(cipherBuffer, 1, sizeof(cipherBuffer), fIn);
+
+        if (bytesRead == 0) {
+            // No more data to read
+            break;
+        }
+
+        // If the bytesRead is not a multiple of AES_BLOCK_SIZE, it indicates
+        // either file corruption or mismatch with the encryption approach
+        if (bytesRead % AES_BLOCK_SIZE != 0) {
+            fprintf(stderr, "Ciphertext block size mismatch! Possibly corrupted.\n");
+            fclose(fIn);
+            fclose(fOut);
+            return 6;
+        }
+
+        // Decrypt in CBC mode
+        AES_cbc_encrypt(cipherBuffer, plainBuffer, bytesRead,
+            &aesKey, ivCopy, AES_DECRYPT);
+
+        // Now plainBuffer contains the original line data (zero padded).
+        // We remove trailing zero bytes to restore the original line content.
+        // This is purely to reconstruct the text line as it was before encryption.
+        size_t realDataLen = bytesRead;
+        while (realDataLen > 0 && plainBuffer[realDataLen - 1] == 0) {
+            realDataLen--;
+        }
+
+        // Write the (zero-stripped) data to the output file
+        // This is text data, so we can just fwrite it or fprintf it.
+        fwrite(plainBuffer, 1, realDataLen, fOut);
+
+        // If the encryption function was using fgets, each chunk was presumably one line
+        // plus newline. If a newline was included, it will appear in the plainBuffer.
+        // This means we don't necessarily need to write our own newline here.
+        // But if you want to forcibly break lines, you could do something like:
+        // fputc('\n', fOut);
+        // However, that might create extra blank lines if the original line
+        // already included '\n'.
+    }
+
+    fclose(fIn);
+    fclose(fOut);
+
+    printf("File '%s' decrypted line-by-line (CBC) into '%s'.\n",
+        inputFilename, outputFilename);
+    return 0;
+}
+
+int decryptFileECBLineByLine(const char* inputFilename,
+     const char* outputFilename,
+     const unsigned char* key,
+     size_t keySize)
+    {
+        // Validate arguments
+        if (!inputFilename || !outputFilename || !key) {
+            fprintf(stderr, "Invalid parameters.\n");
+            return 1;
+        }
+
+        // Check key size
+        if (keySize != 16 && keySize != 24 && keySize != 32) {
+            fprintf(stderr, "Key size must be 16, 24, or 32 bytes.\n");
+            return 2;
+        }
+
+        // Open input (ciphertext) file
+        FILE* fIn = fopen(inputFilename, "rb");
+        if (!fIn) {
+            perror("Failed to open ciphertext file");
+            return 3;
+        }
+
+        // Open output (plaintext) file
+        FILE* fOut = fopen(outputFilename, "w");
+        if (!fOut) {
+            perror("Failed to open output file");
+            fclose(fIn);
+            return 4;
+        }
+
+        // Set up AES key for decryption
+        AES_KEY aesKey;
+        if (AES_set_decrypt_key(key, (int)(keySize * 8), &aesKey) < 0) {
+            fprintf(stderr, "Failed to set AES decryption key.\n");
+            fclose(fIn);
+            fclose(fOut);
+            return 5;
+        }
+
+        // Same chunk size as the line-based encryption example
+        unsigned char cipherBuffer[1024];
+        unsigned char plainBuffer[1024];
+
+        while (1) {
+            size_t bytesRead = fread(cipherBuffer, 1, sizeof(cipherBuffer), fIn);
+            if (bytesRead == 0) {
+                // No more data
+                break;
+            }
+
+            if (bytesRead % AES_BLOCK_SIZE != 0) {
+                fprintf(stderr, "Ciphertext block size mismatch! Possibly corrupted.\n");
+                fclose(fIn);
+                fclose(fOut);
+                return 6;
+            }
+
+            // Decrypt each 16-byte block in this chunk
+            for (size_t offset = 0; offset < bytesRead; offset += AES_BLOCK_SIZE) {
+                AES_decrypt(cipherBuffer + offset, plainBuffer + offset, &aesKey);
+            }
+
+            // Remove trailing zeros
+            size_t realDataLen = bytesRead;
+            while (realDataLen > 0 && plainBuffer[realDataLen - 1] == 0) {
+                realDataLen--;
+            }
+
+            // Write the decrypted line data
+            fwrite(plainBuffer, 1, realDataLen, fOut);
+            // In the encryption example, the newline (if any) was part of the line,
+            // so it will appear in plainBuffer. No extra newline needed unless you want it.
+
+        }
+
+        fclose(fIn);
+        fclose(fOut);
+
+        printf("File '%s' decrypted line-by-line (ECB) into '%s'.\n",
+            inputFilename, outputFilename);
+        return 0;
+}
+
 int main() {
 #ifdef TEST_SHA_FUNCTIONS
 
@@ -1158,6 +1344,67 @@ int main() {
     );
     if (resultECB != 0) {
         fprintf(stderr, "ECB line-by-line encryption failed.\n");
+    }
+#endif
+
+#ifdef TEST_ECB_AND_CBC_DECRYPTION_LINE_BY_LINE
+    unsigned char key[16] = "0123456789ABCDEF";  // 128-bit example
+    unsigned char iv[16] = "IV_IS_16_BYTES!!";  // 16 bytes for CBC
+
+    // Encrypt line-by-line with CBC
+    int resultCBC = encryptFileCBCLineByLine(
+        "plaintext.txt",
+        "ciphertext_cbc.bin",
+        key,
+        sizeof(key),
+        iv
+    );
+    if (resultCBC != 0) {
+        fprintf(stderr, "CBC line-by-line encryption failed.\n");
+    }
+
+    // Encrypt line-by-line with ECB
+    int resultECB = encryptFileECBLineByLine(
+        "plaintext.txt",
+        "ciphertext_ecb.bin",
+        key,
+        sizeof(key)
+    );
+    if (resultECB != 0) {
+        fprintf(stderr, "ECB line-by-line encryption failed.\n");
+    }
+    unsigned char key[16] = "0123456789ABCDEF";  // 128-bit example key
+    unsigned char iv[16] = "IV_IS_16_BYTES!!";  // 16 bytes for CBC
+
+    // Encrypt line by line (CBC)
+    // (See your encryptFileCBCLineByLine function)
+    // encryptFileCBCLineByLine("plaintext.txt", "encrypted_cbc.bin", key, sizeof(key), iv);
+
+    // Decrypt line by line (CBC)
+    int resultCBC = decryptFileCBCLineByLine(
+        "encrypted_cbc.bin",
+        "decrypted_cbc.txt",
+        key,
+        sizeof(key),
+        iv
+    );
+    if (resultCBC != 0) {
+        fprintf(stderr, "CBC line-by-line decryption failed.\n");
+    }
+
+    // Encrypt line by line (ECB)
+    // (See your encryptFileECBLineByLine function)
+    // encryptFileECBLineByLine("plaintext.txt", "encrypted_ecb.bin", key, sizeof(key));
+
+    // Decrypt line by line (ECB)
+    int resultECB = decryptFileECBLineByLine(
+        "encrypted_ecb.bin",
+        "decrypted_ecb.txt",
+        key,
+        sizeof(key)
+    );
+    if (resultECB != 0) {
+        fprintf(stderr, "ECB line-by-line decryption failed.\n");
     }
 #endif
 
