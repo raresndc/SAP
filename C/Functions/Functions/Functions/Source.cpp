@@ -6,6 +6,9 @@
 #include <stdlib.h>
 #include <ctype.h>
 #include <openssl/aes.h>
+#include <openssl/pem.h>
+#include <openssl/rsa.h>
+#include <openssl/err.h>
 
 #define INPUT_BLOCK_LENGTH 15
 #define MAX_LINE_LENGTH 1024  // Maximum length of a line
@@ -58,7 +61,7 @@ void write_in_file(const char* filename) {
     fclose(f);
 }
 
-//will save the iv in iv parameter (txt must be 0xFF, 0X1A etc)
+//will save the iv in iv parameter unsigned char (txt must be 0xFF, 0X1A etc)
 int read_iv_from_file(const char* filename, unsigned char iv[IV_SIZE]) {
     FILE* ivFile = fopen(filename, "r");
     if (!ivFile) {
@@ -94,6 +97,53 @@ int read_iv_from_file(const char* filename, unsigned char iv[IV_SIZE]) {
 
     if (i != IV_SIZE) {
         fprintf(stderr, "Error: IV file contains insufficient or excessive data\n");
+        return 1;
+    }
+
+    return 0;
+}
+
+//will save the iv in iv parameter byte
+int read_iv_from_file_as_uint8(const char* filename, uint8_t iv[IV_SIZE]) {
+    FILE* ivFile = fopen(filename, "r");
+    if (!ivFile) {
+        perror("Failed to open IV file");
+        return 1;
+    }
+
+    char buffer[128];
+    int i = 0;
+
+    if (fgets(buffer, sizeof(buffer), ivFile) == NULL) {
+        perror("Error reading file");
+        fclose(ivFile);
+        return 1;
+    }
+    fclose(ivFile);
+
+    char* ptr = buffer;
+    while (*ptr && i < IV_SIZE) {
+        // Skip commas and whitespace
+        if (*ptr == ',' || isspace((unsigned char)*ptr)) {
+            ptr++;
+            continue;
+        }
+
+        // If the token starts with "0x" or "0X", interpret as hex
+        if (*ptr == '0' && (*(ptr + 1) == 'x' || *(ptr + 1) == 'X')) {
+            // strtol converts the hex string to a long.
+            // The (uint8_t) cast will truncate to 8 bits, which is fine for IV data.
+            iv[i] = (uint8_t)strtol(ptr, &ptr, 16);
+            i++;
+        }
+        else {
+            ptr++;
+        }
+    }
+
+    if (i != IV_SIZE) {
+        fprintf(stderr, "Error: IV file contains insufficient or excessive data (got %d values, need %d)\n",
+            i, IV_SIZE);
         return 1;
     }
 
@@ -1222,6 +1272,233 @@ int decryptFileECBLineByLine(const char* inputFilename,
         return 0;
 }
 
+int encrypt_file_usingRSA(const char* input_file,
+    const char* public_key_file,
+    const char* encrypted_bin_file,
+    const char* encrypted_hex_file)
+{
+    FILE* fsrc = NULL, * fdst = NULL, * fdstxt = NULL, * fkey = NULL;
+    RSA* pubkey = NULL;
+    unsigned char* data = NULL;
+    unsigned char* out = NULL;
+    size_t read_bytes;
+    int key_size, enc_size;
+    int ret = 1;  // return non-zero on error, 0 on success
+
+    // Open input file to be encrypted
+    fsrc = fopen(input_file, "rb");
+    if (!fsrc) {
+        perror("Failed to open input file");
+        goto cleanup;
+    }
+
+    // Open binary output for encrypted data
+    fdst = fopen(encrypted_bin_file, "wb");
+    if (!fdst) {
+        perror("Failed to open encrypted_bin_file");
+        goto cleanup;
+    }
+
+    // Open text output for hex representation
+    fdstxt = fopen(encrypted_hex_file, "w");
+    if (!fdstxt) {
+        perror("Failed to open encrypted_hex_file");
+        goto cleanup;
+    }
+
+    // Read public key
+    fkey = fopen(public_key_file, "rb");
+    if (!fkey) {
+        perror("Failed to open public_key_file");
+        goto cleanup;
+    }
+
+    pubkey = PEM_read_RSAPublicKey(fkey, NULL, NULL, NULL);
+    if (!pubkey) {
+        fprintf(stderr, "Error reading RSA public key\n");
+        goto cleanup;
+    }
+
+    // Get RSA key size
+    key_size = RSA_size(pubkey);
+
+    // Allocate buffers for data and output
+    data = (unsigned char*)malloc(key_size);
+    out = (unsigned char*)malloc(key_size);
+    if (!data || !out) {
+        fprintf(stderr, "Memory allocation failure\n");
+        goto cleanup;
+    }
+
+    // Encrypt in chunks
+    while ((read_bytes = fread(data, 1, key_size, fsrc)) && (read_bytes == (size_t)key_size)) {
+        // Encrypt full chunk with no padding
+        enc_size = RSA_public_encrypt(key_size, data, out, pubkey, RSA_NO_PADDING);
+        if (enc_size == -1) {
+            fprintf(stderr, "RSA_public_encrypt error\n");
+            ERR_print_errors_fp(stderr);
+            goto cleanup;
+        }
+
+        // Write binary ciphertext
+        fwrite(out, 1, key_size, fdst);
+
+        // Write hex ciphertext
+        for (int i = 0; i < key_size; i++) {
+            fprintf(fdstxt, "%02x", out[i]);
+        }
+    }
+
+    // If there's a partial block left, encrypt it with PKCS#1 padding
+    if (read_bytes > 0 && read_bytes < (size_t)key_size) {
+        enc_size = RSA_public_encrypt((int)read_bytes, data, out, pubkey, RSA_PKCS1_PADDING);
+        if (enc_size == -1) {
+            fprintf(stderr, "RSA_public_encrypt (last block) error\n");
+            ERR_print_errors_fp(stderr);
+            goto cleanup;
+        }
+
+        // Write binary ciphertext
+        fwrite(out, 1, key_size, fdst);
+
+        // Write hex ciphertext
+        for (int i = 0; i < key_size; i++) {
+            fprintf(fdstxt, "%02x", out[i]);
+        }
+    }
+
+    // Success
+    ret = 0;
+
+cleanup:
+    if (fsrc) fclose(fsrc);
+    if (fdst) fclose(fdst);
+    if (fdstxt) fclose(fdstxt);
+    if (fkey) fclose(fkey);
+    if (pubkey) RSA_free(pubkey);
+    if (data) free(data);
+    if (out) free(out);
+    return ret;
+}
+
+/**
+ * Decrypt the contents of `encrypted_bin_file` using the RSA `private_key_file`.
+ *
+ * The decrypted data is written to `restored_file`.
+ *
+ * This matches the logic in the original code:
+ *  - The number of blocks is `enc_file_size / key_size`.
+ *  - The first (n-1) blocks are decrypted with `RSA_NO_PADDING`.
+ *  - The last block is decrypted with `RSA_PKCS1_PADDING`.
+ */
+int decrypt_file_usingRSA(const char* encrypted_bin_file,
+    const char* private_key_file,
+    const char* restored_file)
+{
+    FILE* fdst = NULL, * fprivkey = NULL, * frest = NULL;
+    RSA* privkey = NULL;
+    unsigned char* data = NULL;
+    unsigned char* out = NULL;
+    int key_size, enc_file_size, no_blocks;
+    int dec_size;
+    int ret = 1;  // non-zero on error, 0 on success
+
+    // Open the encrypted binary file
+    fdst = fopen(encrypted_bin_file, "rb");
+    if (!fdst) {
+        perror("Failed to open encrypted_bin_file for reading");
+        goto cleanup;
+    }
+
+    // Open the private key
+    fprivkey = fopen(private_key_file, "rb");
+    if (!fprivkey) {
+        perror("Failed to open private_key_file");
+        goto cleanup;
+    }
+
+    privkey = PEM_read_RSAPrivateKey(fprivkey, NULL, NULL, NULL);
+    if (!privkey) {
+        fprintf(stderr, "Error reading RSA private key\n");
+        ERR_print_errors_fp(stderr);
+        goto cleanup;
+    }
+
+    // Determine the RSA key size
+    key_size = RSA_size(privkey);
+
+    // Determine how many blocks in the encrypted file
+    fseek(fdst, 0, SEEK_END);
+    enc_file_size = ftell(fdst);
+    fseek(fdst, 0, SEEK_SET);
+
+    no_blocks = enc_file_size / key_size;
+    if (no_blocks <= 0) {
+        fprintf(stderr, "Encrypted file size is too small or invalid.\n");
+        goto cleanup;
+    }
+
+    // Prepare output file
+    frest = fopen(restored_file, "wb");
+    if (!frest) {
+        perror("Failed to open restored_file");
+        goto cleanup;
+    }
+
+    data = (unsigned char*)malloc(key_size);
+    out = (unsigned char*)malloc(key_size);
+    if (!data || !out) {
+        fprintf(stderr, "Memory allocation failure\n");
+        goto cleanup;
+    }
+
+    // Decrypt the first (n-1) blocks with NO_PADDING
+    for (int i = 0; i < no_blocks - 1; i++) {
+        if (fread(data, 1, key_size, fdst) != (size_t)key_size) {
+            fprintf(stderr, "Failed to read the expected block from file\n");
+            goto cleanup;
+        }
+
+        dec_size = RSA_private_decrypt(key_size, data, out, privkey, RSA_NO_PADDING);
+        if (dec_size < 0) {
+            fprintf(stderr, "RSA_private_decrypt error (NO_PADDING block)\n");
+            ERR_print_errors_fp(stderr);
+            goto cleanup;
+        }
+
+        // Write all decrypted bytes for these blocks
+        fwrite(out, 1, dec_size, frest);
+    }
+
+    // Decrypt the last block with PKCS1_PADDING
+    if (fread(data, 1, key_size, fdst) == (size_t)key_size) {
+        dec_size = RSA_private_decrypt(key_size, data, out, privkey, RSA_PKCS1_PADDING);
+        if (dec_size < 0) {
+            fprintf(stderr, "RSA_private_decrypt error (PKCS1 block)\n");
+            ERR_print_errors_fp(stderr);
+            goto cleanup;
+        }
+
+        // Only write the actual decrypted size for the last block
+        fwrite(out, 1, dec_size, frest);
+    }
+    else {
+        fprintf(stderr, "Error reading the final block.\n");
+        goto cleanup;
+    }
+
+    ret = 0;
+
+cleanup:
+    if (fdst) fclose(fdst);
+    if (fprivkey) fclose(fprivkey);
+    if (frest) fclose(frest);
+    if (privkey) RSA_free(privkey);
+    if (data) free(data);
+    if (out) free(out);
+    return ret;
+}
+
 int main() {
 #ifdef TEST_SHA_FUNCTIONS
 
@@ -1406,6 +1683,48 @@ int main() {
     if (resultECB != 0) {
         fprintf(stderr, "ECB line-by-line decryption failed.\n");
     }
+#endif
+
+#ifdef READING_IV_IN_BYTE
+    uint8_t iv[IV_SIZE];
+
+    // Change "my_iv_file.txt" to the actual path/name of your IV file.
+    if (read_iv_from_file_as_uint8("my_iv_file.txt", iv) != 0) {
+        fprintf(stderr, "Failed to read IV from file.\n");
+        return EXIT_FAILURE;
+    }
+
+    // If we reach here, iv[] is successfully populated.
+    printf("IV read successfully. Here are the bytes in hex:\n");
+    for (int i = 0; i < IV_SIZE; i++) {
+        // Print each byte in two-digit hex form
+        printf("%02X ", iv[i]);
+    }
+    printf("\n");
+#endif
+
+#ifdef RSA
+    const char* input_file = "plaintext.txt";
+    const char* public_key_file = "RSAPublicKey.pem";
+    const char* encrypted_bin_file = "encFile.bin";
+    const char* encrypted_hex_file = "hexEncFile.txt";
+    const char* private_key_file = "RSAPrivateKey.pem";
+    const char* restored_file = "restored.txt";
+
+    if (encrypt_file(input_file, public_key_file,
+        encrypted_bin_file, encrypted_hex_file) != 0)
+    {
+        fprintf(stderr, "Encryption failed.\n");
+        return EXIT_FAILURE;
+    }
+
+    if (decrypt_file(encrypted_bin_file, private_key_file, restored_file) != 0)
+    {
+        fprintf(stderr, "Decryption failed.\n");
+        return EXIT_FAILURE;
+    }
+
+    printf("Encryption and Decryption completed successfully.\n");
 #endif
 
     return 0;
